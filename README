@@ -1,4 +1,4 @@
-Net-Lite-FTP version 0.01
+Net-Lite-FTP version 0.07
 =========================
 
 Usage:
@@ -35,7 +35,7 @@ DEPENDENCIES
 
 This module requires these other modules and libraries:
 
-  blah blah blah
+  Net::SSLeay::Handle
 
 COPYRIGHT AND LICENCE
 
