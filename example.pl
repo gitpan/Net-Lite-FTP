@@ -7,8 +7,6 @@ my $tlsftp=Net::Lite::FTP->new();
 $tlsftp->open("ftp.tls.pl","21");
 $tlsftp->user("user");
 $tlsftp->pass("password");
-$tlsftp->command( "PBSZ 0"); # required.
-$tlsftp->command("PROT P"); # required.
 $tlsftp->list();
 $tlsftp->cwd("pub");
 my $files=$tlsftp->list("*.exe");

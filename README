@@ -1,4 +1,4 @@
-Net-Lite-FTP version 0.07
+Net-Lite-FTP version 0.11
 =========================
 
 Usage:
@@ -6,8 +6,6 @@ Usage:
  $tlsftp->open("ftp.tls.pl","21");
  $tlsftp->user("user");
  $tlsftp->pass("password");
- $tlsftp->command( "PBSZ 0");#Required at the momemnt
- $tlsftp->command("PROT P");#Required at the momemnt
  $tlsftp->cwd("pub");
  my $files=$tlsftp->nlist("*.exe");
  foreach $f (@$files) {
@@ -46,6 +44,4 @@ Copyright (C) 2005 by Dariush Pietrzak
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
 at your option, any later version of Perl 5 you may have available.
-
-
 

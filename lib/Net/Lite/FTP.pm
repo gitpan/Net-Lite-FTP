@@ -25,7 +25,7 @@ our @EXPORT = qw(
 	
 );
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -81,6 +81,9 @@ sub open($$$) {
     {tie(*S, "Net::SSLeay::Handle", $sock);$sock = \*S;};
     $self->{'Sock'}=$sock;
     {select($sock);$|=1;select(STDOUT);};#unbuffer socket
+    # 
+    $self->command("PBSZ 0");# TODO
+    $self->command("PROT P");# WARNING: Hardcoded values...
     return 1;
 }
 sub command ($$){
@@ -287,10 +290,8 @@ Net::Lite::FTP - Perl FTP client
   $tlsftp->open("ftp.tls.pl","21");
   $tlsftp->user("user");
   $tlsftp->pass("password");
-  $tlsftp->command( "PBSZ 0");#Required at the momemnt
-  $tlsftp->command("PROT P");#Required at the momemnt
   $tlsftp->cwd("pub");
-  my @files=$tlsftp->nlst("*.exe");
+  my $files=$tlsftp->nlst("*.exe");
   foreach $f (@files) {
 	  $tlsftp->get($f);
   };
