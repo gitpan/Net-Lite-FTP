@@ -1,0 +1,29 @@
+#!/usr/bin/perl -w
+
+use lib "./lib/";
+use Net::Lite::FTP;
+my $tlsftp=Net::Lite::FTP->new();
+$tlsftp->open("grendel.ar.lublin.pl","2021");
+#ftp://yck:ycaczek@grendel.ar.lublin.pl:2021/
+#
+$tlsftp->user("yck");
+$tlsftp->pass("ycaczek");
+#$tlsftp->command("PWD");
+$tlsftp->command( "PBSZ 0");
+$tlsftp->command("PROT P");
+$tlsftp->list();
+$tlsftp->cwd("ppl/eyck/new70");
+my @files=$tlsftp->list("*.txt");
+use Data::Dumper;
+foreach $f (@files) {
+ print "Hello world\n$f\n";
+# print Dumper($f);
+};
+#$tlsftp->get("EBIMobile.exe");
+my $qqq=$tlsftp->slurp("Iketeru_Futari_ep07_PL.txt");
+print STDERR "Dlugosc scalara: ",length($qqq);
+$tlsftp->get("Iketeru_Futari_ep07_PL.txt");
+
+$tlsftp->cwd("/ppl/yck/");
+$tlsftp->put("Makefile.PL");
+$tlsftp->blat("blat.txt","Blat testing, testing, \n\n1,2,3");
