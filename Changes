@@ -1,5 +1,11 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.12  Tue Jan 18 19:48:52 CET 2005
+	- rename("from","to") introduced
+	- NLST and LIST fixed (thanx to Pablo Valenzuela)
+	- PBSZ and PROT no longer required in client code.
+	- SIZE implemented (thanx to Pablo Valenzuela)
+	- login ( user, pass )
 0.10  Tue Jan 18 09:19:53 CET 2005
 	- Debug, EncryptData properties. Documentation fixed.
 0.09  Fri Jan  7 20:41:03 CET 2005

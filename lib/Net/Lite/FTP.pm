@@ -25,7 +25,7 @@ our @EXPORT = qw(
 	
 );
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -54,14 +54,27 @@ sub user($$) {
 	$self->command("USER $user");
 }
 sub pass($$) {
-	my ($self,$user)=@_;
-	$self->command("PASS $user");
+	my ($self,$pass)=@_;
+	$self->command("PASS $pass");
 }
+sub login($$$) {
+	my ($self,$user,$pass)=@_;
+	$self->command("USER $user");
+	$self->command("PASS $pass");
+}
+
 sub cwd ($$) {
     my ($self,$data)=@_;
     $self->command("CWD $data");
 }
 
+sub size ($$) {
+    my ($self,$filename)=@_;
+    my $size;
+    $size=$self->command("SIZE $filename");
+    $size=~/^\d+\s+(\d+)/ && do {return $1;};
+    return undef;
+}
 
 sub open($$$) {
    my ($self,$host,$port)=@_;
@@ -86,6 +99,14 @@ sub open($$$) {
     $self->command("PROT P");# WARNING: Hardcoded values...
     return 1;
 }
+
+sub rename ($$$) {
+    my ($self,$from,$to)=@_;
+#"RNFR plik1"
+#"RNTO plik2"
+    $self->command("RNFR $from");
+    $self->command("RNTO $to");
+};
 sub command ($$){
     my ($self,$data)=@_;
     print STDERR "Sending: ",$data."\n" if $self->{Debug};
@@ -164,7 +185,8 @@ sub nlst {
     $socket = \*S1;
     while ($tmp=<$socket>) {
 	    #print STDERR "G: $q";
-	    chop($tmp);chop($tmp);#\r\n -> remove.
+	    #chop($tmp);chop($tmp);#\r\n -> remove.
+	    $tmp=~s/\r\n$//;
             push @files,$tmp;
     };
     close $socket;
