@@ -25,7 +25,7 @@ our @EXPORT = qw(
 	
 );
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -107,6 +107,7 @@ sub response ($) {
     
     # Responsy maja format \d\d\d
     #  lub wielolinijkowe: \d\d\d-
+    print STDERR "SRV Response: $read";
     $read=~/^(\d\d\d)/  && do {
         $code=$1;
     };
@@ -147,28 +148,31 @@ sub nlst {
         $socket = Net::SSLeay::Handle->make_socket($host, $port);
         print STDERR "Data link connected.. to $host at $port\n";
     };
-    $self->command("NLST $mask");
+    if (defined($mask)) {
+        $self->command("NLST $mask");
+    } else {
+        $self->command("NLST");
+    };
 
-    tie(*S2, "Net::SSLeay::Handle", $socket);
+    tie(*S1, "Net::SSLeay::Handle", $socket);
     print STDERR "SSL for data connection enabled...\n";
-    $socket = \*S2;
+    $socket = \*S1;
     while ($tmp=<$socket>) {
 	    #print STDERR "G: $q";
-            push @files,$q;
+            push @files,$tmp;
     };
     close $socket;
     print STDERR "resp(end LIST) ",$self->response();
     return \@files;
-
 };
 
-sub put {
-    my ($self,$remote,$local)=@_;
+sub putblat {
+    my ($putorblat,$self,$remote,$local)=@_;
     my $socket;
     my $sock=$self->{'Sock'};
-    $self->command( $sock,"TYPE I");
+    $self->command("TYPE I");
     my $tmp;
-    $tmp=$self->command( $sock,"PASV");
+    $tmp=$self->command("PASV");
     $tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
         #print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
         my $port=$5*256+$6;
@@ -177,30 +181,48 @@ sub put {
         $socket = Net::SSLeay::Handle->make_socket($host, $port);
         print "Data link connected.. to $host at $port \n";
     };
-    $self->command( $sock,"STOR $remote");
+    $self->command("STOR $remote");
 
     tie(*S2, "Net::SSLeay::Handle", $socket);
     print STDERR "SSL for data connection enabled...\n";
     $socket = \*S2;
 
-    open(L,"$local");
+    CORE::open(L,"$local");
     print STDERR "STORE connection opened.\n";
     select($socket);
     #print "selected.\n";
-    while ($tmp=<L>) {print $tmp;};#Probably syswrite/sysread would be smarter..
+    if ($putorblat=~/put/) {
+        while ($tmp=<L>) {print $tmp;};#Probably syswrite/sysread would be smarter..
+    } else {
+        print "blat";
+
+    }
     #print "after write...\n";
     select(STDOUT);
     close L;
     close $socket;
     print  STDERR "resp(afterSTOR) ",response($sock);
 };
-
+sub put {
+    putblat('put',@_);
+};
+sub blat {
+    putblat('blat',@_);
+};
 sub get {
-    my ($self,$remote,$local)=@_;
+    getslurp('get',@_);
+};
+sub slurp {
+    getslurp('slurp',@_);
+};
+
+sub getslurp {
+    my ($getorslurp,$self,$remote,$local)=@_;
     my $socket;
     my $sock=$self->{'Sock'};
-    $self->command($sock,"TYPE I");
-    my $tmp=$self->command($sock,"PASV");
+    $local=$remote unless defined($local);
+    $self->command("TYPE I");
+    my $tmp=$self->command("PASV");
     $tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
         #print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
         my $port=$5*256+$6;
@@ -209,20 +231,26 @@ sub get {
         $socket = Net::SSLeay::Handle->make_socket($host, $port);
         print STDERR "Data link connected to $host at $port..\n";
     };
-    $self->command( $sock, "RETR $remote");
+    $self->command("RETR $remote");
 
-    tie(*S2, "Net::SSLeay::Handle", $socket);
+    tie(*S3, "Net::SSLeay::Handle", $socket);
     print  STDERR "SSL for data connection(RETR) enabled...\n";
-    $socket = \*S2;
+    $socket = \*S3;
 
-    open(L,">$local");
-    while ($tmp=<$socket>) {print L $q; };
-    close L;
+    my $slurped="";
+    if ($getorslurp=~/get/) {
+        print STDERR "getorslurp: get\n";
+        CORE::open(L,">$local");
+        while ($tmp=<$socket>) {print L $tmp; print STDERR ":;";};
+        close L;
+    } else {
+        print STDERR "getorslurp: slurp($getorslurp)\n";
+        while ($tmp=<$socket>) {$slurped.=$tmp;print STDERR ":."; };
+    };
     close $socket;
-    print STDERR "resp(afterRETR) ",response($sock);
+    print STDERR "resp(afterRETR) ",$self->response();
+    return $slurped;
 };
-
-
 
 sub trivialmethod {
    my ($self)=@_;

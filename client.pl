@@ -3,14 +3,14 @@
 use lib "./lib/";
 use Net::Lite::FTP;
 my $tlsftp=Net::Lite::FTP->new();
-$tlsftp->open("ftp.ebi.pl","21");
-$tlsftp->user("al_test");
-$tlsftp->pass("12345678");
+$tlsftp->open("ftp.tls.com","21");
+$tlsftp->user("user");
+$tlsftp->pass("password");
 #$tlsftp->command("PWD");
 $tlsftp->command( "PBSZ 0");
 $tlsftp->command("PROT P");
 $tlsftp->nlist();
-$tlsftp->cwd("arm");
+$tlsftp->cwd("pub");
 my @files=$tlsftp->nlist("*.exe");
 use Data::Dumper;
 foreach $f (@files) {
