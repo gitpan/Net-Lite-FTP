@@ -4,6 +4,7 @@ package Net::Lite::FTP;
 use 5.006000;
 use strict;
 use warnings;
+use IO::Handle;
 
 require Exporter;
 use AutoLoader qw(AUTOLOAD);
@@ -26,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.22';
+our $VERSION = '0.23';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;

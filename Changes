@@ -1,8 +1,9 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.23    
+	- use IO::Handle
 0.22    
 	- use binmode for reading/writing files. TODO: let user use ASCII mode.
-
 0.21    
 	- Use \r\n instead of \n like RFC requires..
 
