@@ -1,0 +1,10 @@
+Revision history for Perl extension Net::Lite::FTP.
+
+0.06  Wed Jan  5 09:55:51 CET 2005
+	- NLST, GET, PUT
+0.02  Wed Jan  5 09:55:51 CET 2005
+	- hello world version
+0.01  Wed Jan  5 09:54:58 2005
+	- original version; created by h2xs 1.23 with options
+		-Xn Net::Lite::FTP
+
