@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.27';
+our $VERSION = '0.28';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -49,6 +49,10 @@ sub new($$) {
 	$self->{"EncryptData"}=1;
 	$self->{"Encrypt"}=1;
 	$self->{"Debug"}=1;
+	$self->{"GetUpdateCallback"}  = undef;
+	$self->{"GetDoneCallback"}    = undef;
+	$self->{"PutUpdateCallback"}  = undef;
+	$self->{"PutDoneCallback"}    = undef;
 	return $self;
 };
 
@@ -130,6 +134,10 @@ sub open($$$) {
 	return 1;
 }
 
+sub quit {
+	my ($self)=@_;
+	return $self->command("QUIT");
+}
 sub rename ($$$) {
 	my ($self,$from,$to)=@_;
 #"RNFR plik1"
@@ -283,7 +291,10 @@ sub putblat {
 #print "selected.\n";
 	if ($putorblat=~/put/) {
 		CORE::open(L,"$local");binmode L;
-		while ($tmp=<L>) {print $tmp;};#Probably syswrite/sysread would be smarter..
+		while ($tmp=<L>) {
+            print $tmp;
+            if (defined ($self->{'PutUpdateCallback'})) {$self->{'PutUpdateCallback'}->(); };#TODO send sth..
+        };#Probably syswrite/sysread would be smarter..
 	} else {
 		print $local;
 
@@ -294,6 +305,7 @@ sub putblat {
 	close $socket;
 	my $response=$self->response();
 	print  STDERR "resp(afterSTOR) ",$response if $self->{Debug};
+	if (defined $self->{'PutDoneCallBack'}) {$self->{'PutDoneCallBack'}->($response);};
 };
 sub put {
 	putblat('put',@_);
@@ -333,15 +345,22 @@ sub getslurp {
 	if ($getorslurp=~/get/) {
 		print STDERR "getorslurp: get\n" if $self->{Debug};
 		CORE::open(L,">$local");binmode L;
-		while ($tmp=<$socket>) {print L $tmp; print STDERR ":;" if $self->{Debug};};
+		while ($tmp=<$socket>) {
+            print L $tmp; print STDERR ":;" if $self->{Debug};
+            if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->(); };#TODO send sth..
+        };
 		close L;
 	} else {
 		print STDERR "getorslurp: slurp($getorslurp)\n" if $self->{Debug};
-		while ($tmp=<$socket>) {$slurped.=$tmp;print STDERR ":." if $self->{Debug}; };
+		while ($tmp=<$socket>) {
+            $slurped.=$tmp;print STDERR ":." if $self->{Debug}; 
+            if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->(); };#TODO send sth..
+        };
 	};
 	close $socket;
 	my $response=$self->response();
 	print STDERR "resp(afterRETR) ",$response if $self->{Debug};
+	if (defined $self->{'GetDoneCallBack'}) {$self->{'GetDoneCallBack'}->($response);};
 	return $slurped;
 };
 
@@ -349,6 +368,29 @@ sub trivialmethod {
 	my ($self)=@_;
 	return 1;
 };
+
+# extras...
+#
+sub registerGetUpdateCallback {
+	my ($self,$callback_ref)=@_;
+
+	$self->{'GetUpdateCallback'} = $callback_ref;
+}
+sub registerGetDoneCallback {
+	my ($self,$callback_ref)=@_;
+
+	$self->{'GetDoneCallback'} = $callback_ref;
+}
+sub registerPutUpdateCallback {
+	my ($self,$callback_ref)=@_;
+
+	$self->{'PutUpdateCallback'} = $callback_ref;
+}
+sub registerPutDoneCallback {
+	my ($self,$callback_ref)=@_;
+
+	$self->{'PutDoneCallback'} = $callback_ref;
+}
 
 
 
@@ -406,4 +448,5 @@ it under the same terms as Perl itself, either Perl version 5.8.4 or,
    at your option, any later version of Perl 5 you may have available.
 
 
-   =cut
+=cut
+
