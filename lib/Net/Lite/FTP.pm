@@ -25,7 +25,7 @@ our @EXPORT = qw(
 	
 );
 
-our $VERSION = '0.091';
+our $VERSION = '0.10';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -44,6 +44,8 @@ sub new($$) {
 #                            $self->{'DBHandle'}=$dbh;
     $self->{"CreationTime"}=time;
     $self->{"Connected"}=0;
+    $self->{"EncryptData"}=1;
+    $self->{"Debug"}=1;
     return $self;
 };
 
@@ -67,12 +69,12 @@ sub open($$$) {
    my $sock;
    $sock = Net::SSLeay::Handle->make_socket($host, $port);
    if (sysread($sock,$data,BUFSIZE)) {
-	   print STDERR "Received: $data";
+	   print STDERR "Received: $data" if $self->{Debug};
    }
     $data="AUTH TLS\n";
     syswrite($sock,$data);
     if (sysread($sock,$data,BUFSIZE)) {
-        print STDERR "Received: $data";
+        print STDERR "Received: $data" if $self->{Debug};
     }
     $self->{'RAWSock'}=$sock;
 
@@ -83,7 +85,7 @@ sub open($$$) {
 }
 sub command ($$){
     my ($self,$data)=@_;
-    print STDERR "Sending: ",$data."\n";
+    print STDERR "Sending: ",$data."\n" if $self->{Debug};
     my $sock=$self->{'Sock'};
     print $sock $data."\n";
     return $self->response();
@@ -107,7 +109,7 @@ sub response ($) {
     
     # Responsy maja format \d\d\d
     #  lub wielolinijkowe: \d\d\d-
-    print STDERR "SRV Response: $read";
+    print STDERR "SRV Response: $read" if $self->{Debug};
     $read=~/^(\d\d\d)/  && do {
         $code=$1;
     };
@@ -118,7 +120,7 @@ sub response ($) {
         do {
             $read=<$sock>;
             $resp.=$read;
-            print " ----> $read\n";
+            print " ----> $read\n" if $self->{Debug};
         } until ($read=~/^\d\d\d\s/);
     };
 
@@ -128,7 +130,7 @@ sub response ($) {
         print "ERR: $resp\n";
         die "Server said we're bad.";
     };
-    print STDERR "RECV: ",$resp;
+    print STDERR "RECV: ",$resp if $self->{Debug};
     return $resp;
 }
 
@@ -146,7 +148,7 @@ sub nlst {
         my $host="$1.$2.$3.$4";
         #print " $host : $port \n";
         $socket = Net::SSLeay::Handle->make_socket($host, $port);
-        print STDERR "Data link connected.. to $host at $port\n";
+        print STDERR "Data link connected.. to $host at $port\n" if $self->{Debug};
     };
     if (defined($mask)) {
         $self->command("NLST $mask");
@@ -155,14 +157,16 @@ sub nlst {
     };
 
     tie(*S1, "Net::SSLeay::Handle", $socket);
-    print STDERR "SSL for data connection enabled...\n";
+    print STDERR "SSL for data connection enabled...\n" if $self->{Debug};
     $socket = \*S1;
     while ($tmp=<$socket>) {
 	    #print STDERR "G: $q";
+	    chop($tmp);chop($tmp);#\r\n -> remove.
             push @files,$tmp;
     };
     close $socket;
-    print STDERR "resp(end LIST) ",$self->response();
+    my $response=$self->response();
+    print STDERR "resp(end LIST) ",$response if $self->{Debug};
     return \@files;
 };
 
@@ -180,15 +184,18 @@ sub putblat {
         my $host="$1.$2.$3.$4";
         #print " $host : $port \n";
         $socket = Net::SSLeay::Handle->make_socket($host, $port);
-        print "Data link connected.. to $host at $port \n";
+        print "Data link connected.. to $host at $port \n" if $self->{Debug};
     };
+    if ($self->{"EncryptData"}==0) {$self->command("PROT C"); };
     $self->command("STOR $remote");
 
+    if ($self->{"EncryptData"}==1) {
     tie(*S2, "Net::SSLeay::Handle", $socket);
-    print STDERR "SSL for data connection enabled...\n";
+    print STDERR "SSL for data connection enabled...\n" if $self->{Debug};
     $socket = \*S2;
+    };
 
-    print STDERR "STORE connection opened.\n";
+    print STDERR "STORE connection opened.\n" if $self->{Debug};
     select($socket);
     #print "selected.\n";
     if ($putorblat=~/put/) {
@@ -202,7 +209,9 @@ sub putblat {
     select(STDOUT);
     close L;
     close $socket;
-    print  STDERR "resp(afterSTOR) ",$self->response();
+    if ($self->{"EncryptData"}==0) {$self->command("PROT P"); };
+    my $response=$self->response();
+    print  STDERR "resp(afterSTOR) ",$response if $self->{Debug};
 };
 sub put {
     putblat('put',@_);
@@ -230,26 +239,29 @@ sub getslurp {
         my $host="$1.$2.$3.$4";
         #print " $host : $port \n";
         $socket = Net::SSLeay::Handle->make_socket($host, $port);
-        print STDERR "Data link connected to $host at $port..\n";
+        print STDERR "Data link connected to $host at $port..\n" if $self->{Debug};
     };
+    if ($self->{"EncryptData"}==0) {$self->command("PROT C"); };
     $self->command("RETR $remote");
-
+    if ($self->{"EncryptData"}==1) {
     tie(*S3, "Net::SSLeay::Handle", $socket);
-    print  STDERR "SSL for data connection(RETR) enabled...\n";
+    print  STDERR "SSL for data connection(RETR) enabled...\n" if $self->{Debug};
     $socket = \*S3;
-
+    };
     my $slurped="";
     if ($getorslurp=~/get/) {
-        print STDERR "getorslurp: get\n";
+        print STDERR "getorslurp: get\n" if $self->{Debug};
         CORE::open(L,">$local");
-        while ($tmp=<$socket>) {print L $tmp; print STDERR ":;";};
+        while ($tmp=<$socket>) {print L $tmp; print STDERR ":;" if $self->{Debug};};
         close L;
     } else {
-        print STDERR "getorslurp: slurp($getorslurp)\n";
-        while ($tmp=<$socket>) {$slurped.=$tmp;print STDERR ":."; };
+        print STDERR "getorslurp: slurp($getorslurp)\n" if $self->{Debug};
+        while ($tmp=<$socket>) {$slurped.=$tmp;print STDERR ":." if $self->{Debug}; };
     };
     close $socket;
-    print STDERR "resp(afterRETR) ",$self->response();
+    my $response=$self->response();
+    print STDERR "resp(afterRETR) ",$response if $self->{Debug};
+    if ($self->{"EncryptData"}==0) {$self->command("PROT P"); };
     return $slurped;
 };
 

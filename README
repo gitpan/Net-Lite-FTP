@@ -9,8 +9,8 @@ Usage:
  $tlsftp->command( "PBSZ 0");#Required at the momemnt
  $tlsftp->command("PROT P");#Required at the momemnt
  $tlsftp->cwd("pub");
- my @files=$tlsftp->nlist("*.exe");
- foreach $f (@files) {
+ my $files=$tlsftp->nlist("*.exe");
+ foreach $f (@$files) {
 	 $tlsftp->get($f);
  };
 
