@@ -1,5 +1,6 @@
 package Net::Lite::FTP;
 
+
 use 5.008004;
 use strict;
 use warnings;
@@ -16,21 +17,21 @@ our @ISA = qw(Exporter);
 # If you do not need this, moving things directly into @EXPORT or @EXPORT_OK
 # will save memory.
 our %EXPORT_TAGS = ( 'all' => [ qw(
-	
-) ] );
+
+			) ] );
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
 our @EXPORT = qw(
-	
-);
 
-our $VERSION = '0.12';
+		);
+
+our $VERSION = '0.19';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
 BEGIN {
-use Net::SSLeay::Handle qw/shutdown/;
+	use Net::SSLeay::Handle qw/shutdown/;
 # You only need this if your FTP server requires client certs:
 #Net::SSLeay::Handle::_set_cert("/home/eyck/my.pem"); 
 #Net::SSLeay::Handle::_set_key("/home/eyck/my.pem");
@@ -38,15 +39,16 @@ use Net::SSLeay::Handle qw/shutdown/;
 };
 
 sub new($$) {
-    my $class=shift;
-    my $self={};
-    bless $self,$class;
+	my $class=shift;
+	my $self={};
+	bless $self,$class;
 #                            $self->{'DBHandle'}=$dbh;
-    $self->{"CreationTime"}=time;
-    $self->{"Connected"}=0;
-    $self->{"EncryptData"}=1;
-    $self->{"Debug"}=1;
-    return $self;
+	$self->{"CreationTime"}=time;
+	$self->{"Connected"}=0;
+	$self->{"EncryptData"}=1;
+	$self->{"Encrypt"}=1;
+	$self->{"Debug"}=1;
+	return $self;
 };
 
 sub user($$) {
@@ -64,235 +66,265 @@ sub login($$$) {
 }
 
 sub cwd ($$) {
-    my ($self,$data)=@_;
-    $self->command("CWD $data");
+	my ($self,$data)=@_;
+	$self->command("CWD $data");
 }
 
 sub size ($$) {
-    my ($self,$filename)=@_;
-    my $size;
-    $size=$self->command("SIZE $filename");
-    $size=~/^\d+\s+(\d+)/ && do {return $1;};
-    return undef;
+	my ($self,$filename)=@_;
+	my $size;
+	$size=$self->command("SIZE $filename");
+	$size=~/^\d+\s+(\d+)/ && do {return $1;};
+	return undef;
 }
+sub cdup ($$) {
+	my ($self,$data)=@_;
+	$self->command("CDUP");
+}
+sub message ($) {
+	my ($self)=@_;
+	return $self->{'FTPMSG'};
+};
+sub msgcode ($) {
+	my ($self)=@_;
+	return $self->{'FTPCODE'};
+};
 
 sub open($$$) {
-   my ($self,$host,$port)=@_;
-   my ($data);
-   my $sock;
-   $sock = Net::SSLeay::Handle->make_socket($host, $port);
-   if (sysread($sock,$data,BUFSIZE)) {
-	   print STDERR "Received: $data" if $self->{Debug};
-   }
-    $data="AUTH TLS\n";
-    syswrite($sock,$data);
-    if (sysread($sock,$data,BUFSIZE)) {
-        print STDERR "Received: $data" if $self->{Debug};
-    }
-    $self->{'RAWSock'}=$sock;
+	my ($self,$host,$port)=@_;
+	my ($data);
+	my $sock;
+	$sock = Net::SSLeay::Handle->make_socket($host, $port);
+	if (sysread($sock,$data,BUFSIZE)) {
+		print STDERR "Received: $data" if $self->{Debug};
+	}
+	if ($self->{'Encrypt'}) {
+		$data="AUTH TLS\n";
+		syswrite($sock,$data);
+		if (sysread($sock,$data,BUFSIZE)) {
+			print STDERR "Received: $data" if $self->{Debug};
+		}
+	}
+	$self->{'RAWSock'}=$sock;
 
-    {tie(*S, "Net::SSLeay::Handle", $sock);$sock = \*S;};
-    $self->{'Sock'}=$sock;
-    {select($sock);$|=1;select(STDOUT);};#unbuffer socket
-    # 
-    $self->command("PBSZ 0");# TODO
-    $self->command("PROT P");# WARNING: Hardcoded values...
-    return 1;
+	if ($self->{'Encrypt'}) {
+		#{tie(*S, "Net::SSLeay::Handle", $sock);$sock = \*S;};
+		# Unique glob?
+		{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $sock);$sock = \*$io;};
+	}
+	$self->{'Sock'}=$sock;
+	{select($sock);$|=1;select(STDOUT);};#unbuffer socket
+
+# 
+	if ($self->{'Encrypt'}) {
+		$self->command("PBSZ 0");# TODO
+		if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
+	};
+	return 1;
 }
 
 sub rename ($$$) {
-    my ($self,$from,$to)=@_;
+	my ($self,$from,$to)=@_;
 #"RNFR plik1"
 #"RNTO plik2"
-    $self->command("RNFR $from");
-    $self->command("RNTO $to");
+	if ($self->command("RNFR $from")) {
+	return $self->command("RNTO $to");
+	} else {return 0;};
 };
 sub command ($$){
-    my ($self,$data)=@_;
-    print STDERR "Sending: ",$data."\n" if $self->{Debug};
-    my $sock=$self->{'Sock'};
-    print $sock $data."\n";
-    return $self->response();
+	my ($self,$data)=@_;
+	print STDERR "Sending: ",$data."\n" if $self->{Debug};
+	my $sock=$self->{'Sock'};
+	print $sock $data."\n";
+	return $self->response();
 }
 
 sub response ($) {
-    my ($self)=@_;
-    my $sock=$self->{'Sock'};
-    my ($read,$resp,$code,$cont);
-    $read=($resp=<$sock>);
-    return unless defined($read);
-    #UWAGA!
-    # wcale nieprawda to co nizej pisze. Jesli pierwsza linijka to \d\d\d-
-    #  to odbierac linijki az do napotkania \d\d\d\s
-    #  np:
-    #  226-EDI processing started
-    #   01 costam...
-    #   02 costam..
-    #  226 ...EDI processing complete
+	my ($self)=@_;
+	my $sock=$self->{'Sock'};
+	my ($read,$resp,$code,$cont);
+	$read=($resp=<$sock>);
+	return unless defined($read);
+#UWAGA!
+# wcale nieprawda to co nizej pisze. Jesli pierwsza linijka to \d\d\d-
+#  to odbierac linijki az do napotkania \d\d\d\s
+#  np:
+#  226-EDI processing started
+#   01 costam...
+#   02 costam..
+#  226 ...EDI processing complete
 
-    
-    # Responsy maja format \d\d\d
-    #  lub wielolinijkowe: \d\d\d-
-    print STDERR "SRV Response: $read" if $self->{Debug};
-    $read=~/^(\d\d\d)/  && do {
-        $code=$1;
-    };
-    $read=~/^(\d\d\d)-/  && do {
-        $cont=1;
-    };
-    if ($cont) {
-        do {
-            $read=<$sock>;
-            $resp.=$read;
-            print " ----> $read\n" if $self->{Debug};
-        } until ($read=~/^\d\d\d\s/);
-    };
 
-    if ($code>399) {
-        warn "Jaki¶ problem, chyba najlepiej sie wycofac\n";
-        warn $resp;
-        print "ERR: $resp\n";
-        die "Server said we're bad.";
-    };
-    print STDERR "RECV: ",$resp if $self->{Debug};
-    return $resp;
+# Responsy maja format \d\d\d
+#  lub wielolinijkowe: \d\d\d-
+	print STDERR "SRV Response: $read" if $self->{Debug};
+	$read=~/^(\d\d\d)/  && do {
+		$code=$1;
+	};
+	$read=~/^(\d\d\d)-/  && do {
+		$cont=1;
+	};
+	if ($cont) {
+		do {
+			$read=<$sock>;
+			$resp.=$read;
+			print " ----> $read\n" if $self->{Debug};
+		} until ($read=~/^\d\d\d\s/);
+	};
+	$self->{'FTPCODE'}=$code;
+	$self->{'FTPMSG'}=$resp;
+
+
+	if ($code>399) {
+#warn "Jaki¶ problem, chyba najlepiej sie wycofac\n";
+#warn $resp;
+#		print STDERR "ERR: $resp\n";
+#warn "Server said we're bad.";
+		return 0;
+	};
+	print STDERR "RECV: ",$resp if $self->{Debug};
+	return $resp;
 }
 
 sub list {return nlst(@_);};
 sub nlst {
-    my ($self,$mask)=@_;
-    my $sock=$self->{'Sock'};
-    my $socket;
-    my (@files);
-    my $tmp;
-    $tmp=$self->command("PASV");
-    $tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
-        #print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
-        my $port=$5*256+$6;
-        my $host="$1.$2.$3.$4";
-        #print " $host : $port \n";
-        $socket = Net::SSLeay::Handle->make_socket($host, $port);
-        print STDERR "Data link connected.. to $host at $port\n" if $self->{Debug};
-    };
-    if (defined($mask)) {
-        $self->command("NLST $mask");
-    } else {
-        $self->command("NLST");
-    };
+	my ($self,$mask)=@_;
+	my $sock=$self->{'Sock'};
+	my $socket;
+	my (@files);
+	my $tmp;
+	if ($tmp=$self->command("PASV")) {
+		$tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
+#print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
+			my $port=$5*256+$6;
+			my $host="$1.$2.$3.$4";
+#print " $host : $port \n";
+			$socket = Net::SSLeay::Handle->make_socket($host, $port);
+			print STDERR "Data link connected.. to $host at $port\n" if $self->{Debug};
+		};
+		my $response;
+		if (defined($mask)) {
+			$response=$self->command("NLST $mask");
+		} else {
+			$response=$self->command("NLST");
+		};
+#print STDERR "ReSPONSE: -> : $response\n";
+		if ($response) {
 
-    tie(*S1, "Net::SSLeay::Handle", $socket);
-    print STDERR "SSL for data connection enabled...\n" if $self->{Debug};
-    $socket = \*S1;
-    while ($tmp=<$socket>) {
-	    #print STDERR "G: $q";
-	    #chop($tmp);chop($tmp);#\r\n -> remove.
-	    $tmp=~s/\r\n$//;
-            push @files,$tmp;
-    };
-    close $socket;
-    my $response=$self->response();
-    print STDERR "resp(end LIST) ",$response if $self->{Debug};
-    return \@files;
+			if ($self->{"EncryptData"}==1) {
+				{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $socket);$socket = \*$io;};
+				print STDERR "SSL for data connection enabled...\n" if $self->{Debug};
+			};
+			while ($tmp=<$socket>) {
+#print STDERR "G: $q";
+#chop($tmp);chop($tmp);#\r\n -> remove.
+				$tmp=~s/\r\n$//;
+				push @files,$tmp;
+			};
+		};
+		close $socket;
+		if ($response) {$response=$self->response();};
+		print STDERR "resp(end LIST) ",$response if $self->{Debug};
+		return \@files if $response;
+	};
+	return 0;
 };
 
 sub putblat {
-    my ($putorblat,$self,$remote,$local)=@_;
-    my $socket;
-    my $sock=$self->{'Sock'};
-    $local=$remote unless defined($local);
-    $self->command("TYPE I");
-    my $tmp;
-    $tmp=$self->command("PASV");
-    $tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
-        #print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
-        my $port=$5*256+$6;
-        my $host="$1.$2.$3.$4";
-        #print " $host : $port \n";
-        $socket = Net::SSLeay::Handle->make_socket($host, $port);
-        print "Data link connected.. to $host at $port \n" if $self->{Debug};
-    };
-    if ($self->{"EncryptData"}==0) {$self->command("PROT C"); };
-    $self->command("STOR $remote");
+	my ($putorblat,$self,$remote,$local)=@_;
+	my $socket;
+	my $sock=$self->{'Sock'};
+	$local=$remote unless defined($local);
+	$self->command("TYPE I");
+	my $tmp;
+	$tmp=$self->command("PASV");
+	$tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
+#print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
+		my $port=$5*256+$6;
+		my $host="$1.$2.$3.$4";
+#print " $host : $port \n";
+		$socket = Net::SSLeay::Handle->make_socket($host, $port)||die "can't create DATA socket at putblat ($host,$port) $!";
+		print "Data link connected.. to $host at $port \n" if $self->{Debug};
+	};
+	die "PASV NOT CONNECTED!($tmp) $!\n" unless defined($socket);
+	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
+	$self->command("STOR $remote");
 
-    if ($self->{"EncryptData"}==1) {
-    tie(*S2, "Net::SSLeay::Handle", $socket);
-    print STDERR "SSL for data connection enabled...\n" if $self->{Debug};
-    $socket = \*S2;
-    };
+	if ($self->{"EncryptData"}==1) {
+		{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $socket);$socket = \*$io;};
+		print STDERR "SSL for data connection enabled...\n" if $self->{Debug};
+	};
 
-    print STDERR "STORE connection opened.\n" if $self->{Debug};
-    select($socket);
-    #print "selected.\n";
-    if ($putorblat=~/put/) {
-        CORE::open(L,"$local");
-        while ($tmp=<L>) {print $tmp;};#Probably syswrite/sysread would be smarter..
-    } else {
-        print $local;
+	print STDERR "STORE connection opened.\n" if $self->{Debug};
+	select($socket);
+#print "selected.\n";
+	if ($putorblat=~/put/) {
+		CORE::open(L,"$local");
+		while ($tmp=<L>) {print $tmp;};#Probably syswrite/sysread would be smarter..
+	} else {
+		print $local;
 
-    }
-    #print "after write...\n";
-    select(STDOUT);
-    close L;
-    close $socket;
-    if ($self->{"EncryptData"}==0) {$self->command("PROT P"); };
-    my $response=$self->response();
-    print  STDERR "resp(afterSTOR) ",$response if $self->{Debug};
+	}
+#print "after write...\n";
+	select(STDOUT);
+	close L;
+	close $socket;
+	my $response=$self->response();
+	print  STDERR "resp(afterSTOR) ",$response if $self->{Debug};
 };
 sub put {
-    putblat('put',@_);
+	putblat('put',@_);
 };
 sub blat {
-    putblat('blat',@_);
+	putblat('blat',@_);
 };
 sub get {
-    getslurp('get',@_);
+	getslurp('get',@_);
 };
 sub slurp {
-    getslurp('slurp',@_);
+	getslurp('slurp',@_);
 };
 
 sub getslurp {
-    my ($getorslurp,$self,$remote,$local)=@_;
-    my $socket;
-    my $sock=$self->{'Sock'};
-    $local=$remote unless defined($local);
-    $self->command("TYPE I");
-    my $tmp=$self->command("PASV");
-    $tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
-        #print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
-        my $port=$5*256+$6;
-        my $host="$1.$2.$3.$4";
-        #print " $host : $port \n";
-        $socket = Net::SSLeay::Handle->make_socket($host, $port);
-        print STDERR "Data link connected to $host at $port..\n" if $self->{Debug};
-    };
-    if ($self->{"EncryptData"}==0) {$self->command("PROT C"); };
-    $self->command("RETR $remote");
-    if ($self->{"EncryptData"}==1) {
-    tie(*S3, "Net::SSLeay::Handle", $socket);
-    print  STDERR "SSL for data connection(RETR) enabled...\n" if $self->{Debug};
-    $socket = \*S3;
-    };
-    my $slurped="";
-    if ($getorslurp=~/get/) {
-        print STDERR "getorslurp: get\n" if $self->{Debug};
-        CORE::open(L,">$local");
-        while ($tmp=<$socket>) {print L $tmp; print STDERR ":;" if $self->{Debug};};
-        close L;
-    } else {
-        print STDERR "getorslurp: slurp($getorslurp)\n" if $self->{Debug};
-        while ($tmp=<$socket>) {$slurped.=$tmp;print STDERR ":." if $self->{Debug}; };
-    };
-    close $socket;
-    my $response=$self->response();
-    print STDERR "resp(afterRETR) ",$response if $self->{Debug};
-    if ($self->{"EncryptData"}==0) {$self->command("PROT P"); };
-    return $slurped;
+	my ($getorslurp,$self,$remote,$local)=@_;
+	my $socket;
+	my $sock=$self->{'Sock'};
+	$local=$remote unless defined($local);
+	$self->command("TYPE I");
+	my $tmp=$self->command("PASV");
+	$tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
+#print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
+		my $port=$5*256+$6;
+		my $host="$1.$2.$3.$4";
+#print " $host : $port \n";
+		$socket = Net::SSLeay::Handle->make_socket($host, $port)||die "can't create data socket at getslurp($host,$port) $!";
+		print STDERR "Data link connected to $host at $port..\n" if $self->{Debug};
+	};
+	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
+	$self->command("RETR $remote");
+	if ($self->{"EncryptData"}==1) {
+		{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $socket);$socket = \*$io;};
+		print  STDERR "SSL for data connection(RETR) enabled...\n" if $self->{Debug};
+	};
+	my $slurped="";
+	if ($getorslurp=~/get/) {
+		print STDERR "getorslurp: get\n" if $self->{Debug};
+		CORE::open(L,">$local");
+		while ($tmp=<$socket>) {print L $tmp; print STDERR ":;" if $self->{Debug};};
+		close L;
+	} else {
+		print STDERR "getorslurp: slurp($getorslurp)\n" if $self->{Debug};
+		while ($tmp=<$socket>) {$slurped.=$tmp;print STDERR ":." if $self->{Debug}; };
+	};
+	close $socket;
+	my $response=$self->response();
+	print STDERR "resp(afterRETR) ",$response if $self->{Debug};
+	return $slurped;
 };
 
 sub trivialmethod {
-   my ($self)=@_;
-   return 1;
+	my ($self)=@_;
+	return 1;
 };
 
 
@@ -307,16 +339,16 @@ Net::Lite::FTP - Perl FTP client
 
 =head1 SYNOPSIS
 
-  use Net::Lite::FTP;
-  my $tlsftp=Net::Lite::FTP->new();
-  $tlsftp->open("ftp.tls.pl","21");
-  $tlsftp->user("user");
-  $tlsftp->pass("password");
-  $tlsftp->cwd("pub");
-  my $files=$tlsftp->nlst("*.exe");
-  foreach $f (@files) {
-	  $tlsftp->get($f);
-  };
+use Net::Lite::FTP;
+my $tlsftp=Net::Lite::FTP->new();
+$tlsftp->open("ftp.tls.pl","21");
+$tlsftp->user("user");
+$tlsftp->pass("password");
+$tlsftp->cwd("pub");
+my $files=$tlsftp->nlst("*.exe");
+foreach $f (@files) {
+	$tlsftp->get($f);
+};
 
 
 =head1 DESCRIPTION
@@ -348,7 +380,7 @@ Copyright (C) 2005 by Dariush Pietrzak
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.4 or,
-at your option, any later version of Perl 5 you may have available.
+   at your option, any later version of Perl 5 you may have available.
 
 
-=cut
+   =cut
