@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.23';
+our $VERSION = '0.27';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -98,9 +98,13 @@ sub open($$$) {
 	my ($data);
 	my $sock;
 	$sock = Net::SSLeay::Handle->make_socket($host, $port);
+	$self->{'Sock'}=$sock;
 	if (sysread($sock,$data,BUFSIZE)) {
-		print STDERR "Received: $data" if $self->{Debug};
+		print STDERR "OPEN.Received: $data" if $self->{Debug};
+		$data=$self->responserest($data);
+		print STDERR "OPEN..Received: $data" if $self->{Debug};
 	}
+
 	if ($self->{'Encrypt'}) {
 		$data="AUTH TLS\r\n";
 		syswrite($sock,$data);
@@ -147,7 +151,16 @@ sub response ($) {
 	my $sock=$self->{'Sock'};
 	my ($read,$resp,$code,$cont);
 	$read=($resp=<$sock>);
+	warn "Damn! undefined response$!\n" unless defined($read);
 	return unless defined($read);
+	return $self->responserest($read);
+}
+
+sub responserest ($$) {
+	my ($self,$read)=@_;
+	my $sock=$self->{'Sock'};
+	my ($resp,$code,$cont);
+	$resp=$read;
 #UWAGA!
 # wcale nieprawda to co nizej pisze. Jesli pierwsza linijka to \d\d\d-
 #  to odbierac linijki az do napotkania \d\d\d\s
@@ -166,13 +179,15 @@ sub response ($) {
 	};
 	$read=~/^(\d\d\d)-/  && do {
 		$cont=1;
+		print STDERR "wielolinijkowa odpowiedz z servera.." if $self->{Debug};
 	};
+	if ($read=~/^(\d\d\d)\s/m) {$cont=0;}; # wyjatek na wielolinijkowe na dziendobry
 	if ($cont) {
 		do {
 			$read=<$sock>;
 			$resp.=$read;
 			print " ----> $read\n" if $self->{Debug};
-		} until ($read=~/^\d\d\d\s/);
+		} until ($read=~/^\d\d\d\s/m);
 	};
 	$self->{'FTPCODE'}=$code;
 	$self->{'FTPMSG'}=$resp;
@@ -197,13 +212,18 @@ sub nlst {
 	my (@files);
 	my $tmp;
 	if ($tmp=$self->command("PASV")) {
+		#print "==> $tmp \n";
 		$tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
 #print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
 			my $port=$5*256+$6;
 			my $host="$1.$2.$3.$4";
 #print " $host : $port \n";
 			$socket = Net::SSLeay::Handle->make_socket($host, $port);
-			print STDERR "Data link connected.. to $host at $port\n" if $self->{Debug};
+			if (defined($socket)) {
+				print STDERR "Data link connected.. to $host at $port\n" if $self->{Debug};
+			} else {
+				die "Data link NOT connected ($host,$port) $!";
+			};
 		};
 		my $response;
 		if (defined($mask)) {

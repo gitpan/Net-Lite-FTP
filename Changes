@@ -1,5 +1,9 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.26
+	- another fix for multiline MOTD
+0.25
+	- Fix initial server line handling (support multiline MOTD)
 0.23    
 	- use IO::Handle
 0.22    
