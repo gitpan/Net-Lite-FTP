@@ -1,5 +1,7 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.20	Sat Feb 12 20:31:26 CET 2005
+	- relax 'use perl', we should work equally well on 5.6.0
 
 0.19 
 	- EncryptData=0 behaviour changed. We no longer send "PROT C", "PROT P" at every command.
