@@ -26,7 +26,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.20';
+our $VERSION = '0.21';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -74,7 +74,9 @@ sub size ($$) {
 	my ($self,$filename)=@_;
 	my $size;
 	$size=$self->command("SIZE $filename");
-	$size=~/^\d+\s+(\d+)/ && do {return $1;};
+	if (defined($size)) {
+		$size=~/^\d+\s+(\d+)/ && do {return $1;};
+	};
 	return undef;
 }
 sub cdup ($$) {
@@ -99,7 +101,7 @@ sub open($$$) {
 		print STDERR "Received: $data" if $self->{Debug};
 	}
 	if ($self->{'Encrypt'}) {
-		$data="AUTH TLS\n";
+		$data="AUTH TLS\r\n";
 		syswrite($sock,$data);
 		if (sysread($sock,$data,BUFSIZE)) {
 			print STDERR "Received: $data" if $self->{Debug};
@@ -135,7 +137,7 @@ sub command ($$){
 	my ($self,$data)=@_;
 	print STDERR "Sending: ",$data."\n" if $self->{Debug};
 	my $sock=$self->{'Sock'};
-	print $sock $data."\n";
+	print $sock $data."\r\n";
 	return $self->response();
 }
 
