@@ -1,5 +1,7 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.09  Fri Jan  7 20:41:03 CET 2005
+	- get and put are working, so are slurp and blat.
 0.06  Wed Jan  5 09:55:51 CET 2005
 	- NLST, GET, PUT
 0.02  Wed Jan  5 09:55:51 CET 2005

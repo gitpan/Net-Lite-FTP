@@ -25,7 +25,7 @@ our @EXPORT = qw(
 	
 );
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -170,6 +170,7 @@ sub putblat {
     my ($putorblat,$self,$remote,$local)=@_;
     my $socket;
     my $sock=$self->{'Sock'};
+    $local=$remote unless defined($local);
     $self->command("TYPE I");
     my $tmp;
     $tmp=$self->command("PASV");
@@ -187,21 +188,21 @@ sub putblat {
     print STDERR "SSL for data connection enabled...\n";
     $socket = \*S2;
 
-    CORE::open(L,"$local");
     print STDERR "STORE connection opened.\n";
     select($socket);
     #print "selected.\n";
     if ($putorblat=~/put/) {
+        CORE::open(L,"$local");
         while ($tmp=<L>) {print $tmp;};#Probably syswrite/sysread would be smarter..
     } else {
-        print "blat";
+        print $local;
 
     }
     #print "after write...\n";
     select(STDOUT);
     close L;
     close $socket;
-    print  STDERR "resp(afterSTOR) ",response($sock);
+    print  STDERR "resp(afterSTOR) ",$self->response();
 };
 sub put {
     putblat('put',@_);
