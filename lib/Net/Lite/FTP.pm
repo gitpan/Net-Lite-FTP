@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.28';
+our $VERSION = '0.29';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -88,6 +88,13 @@ sub cdup ($$) {
 	my ($self,$data)=@_;
 	$self->command("CDUP");
 }
+sub dele ($$) {
+	my ($self,$pathname)=@_;
+    return undef unless defined($pathname);
+	$self->command("DELE $pathname");
+}
+sub rm {dele(@_);};
+
 sub message ($) {
 	my ($self)=@_;
 	return $self->{'FTPMSG'};
@@ -345,6 +352,8 @@ sub getslurp {
 	if ($getorslurp=~/get/) {
 		print STDERR "getorslurp: get\n" if $self->{Debug};
 		CORE::open(L,">$local");binmode L;
+		# TODO replace while <$socket> with
+		# TODO while sysread($sock,$tmp,BUFSIZE);
 		while ($tmp=<$socket>) {
             print L $tmp; print STDERR ":;" if $self->{Debug};
             if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->(); };#TODO send sth..
