@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.29';
+our $VERSION = '0.30';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -94,6 +94,7 @@ sub dele ($$) {
 	$self->command("DELE $pathname");
 }
 sub rm {dele(@_);};
+sub delete {dele(@_);};
 
 sub message ($) {
 	my ($self)=@_;
