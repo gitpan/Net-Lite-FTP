@@ -88,7 +88,7 @@ sub cdup ($$) {
 	my ($self,$data)=@_;
 	$self->command("CDUP");
 }
-sub dele ($$) {
+sub dele {
 	my ($self,$pathname)=@_;
     return undef unless defined($pathname);
 	$self->command("DELE $pathname");
@@ -374,7 +374,7 @@ sub getslurp {
 	return $slurped;
 };
 
-sub trivialmethod {
+sub trivialm {
 	my ($self)=@_;
 	return 1;
 };

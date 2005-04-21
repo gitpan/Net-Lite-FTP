@@ -10,7 +10,7 @@ BEGIN { use_ok('Net::Lite::FTP') };
 
 my $obj = Net::Lite::FTP->new;
 isa_ok( $obj, 'Net::Lite::FTP',"Clasa obiektu" );
-is  ( $obj->trivialmethod(), 1, "Trivial method");
+is  ( $obj->trivialm(), 1, "Trivial method");
 
 
 

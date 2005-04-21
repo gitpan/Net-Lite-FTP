@@ -1,8 +1,8 @@
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Net-Lite-FTP
-version:      0.21
+version:      0.30
 version_from: VERSION
-licence: perl
+license: perl
 installdirs:  site
 copyright: perl
 requires:
