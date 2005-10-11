@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.30';
+our $VERSION = '0.32';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -168,7 +168,7 @@ sub response ($) {
 	my ($read,$resp,$code,$cont);
 	$read=($resp=<$sock>);
 	warn "Damn! undefined response$!\n" unless defined($read);
-	return unless defined($read);
+	return undef unless defined($read);
 	return $self->responserest($read);
 }
 
@@ -226,21 +226,8 @@ sub nlst {
 	my $sock=$self->{'Sock'};
 	my $socket;
 	my (@files);
-	my $tmp;
-	if ($tmp=$self->command("PASV")) {
-		#print "==> $tmp \n";
-		$tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
-#print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
-			my $port=$5*256+$6;
-			my $host="$1.$2.$3.$4";
-#print " $host : $port \n";
-			$socket = Net::SSLeay::Handle->make_socket($host, $port);
-			if (defined($socket)) {
-				print STDERR "Data link connected.. to $host at $port\n" if $self->{Debug};
-			} else {
-				die "Data link NOT connected ($host,$port) $!";
-			};
-		};
+	$socket=$self->datasocket();
+	if (defined($socket)) {
 		my $response;
 		if (defined($mask)) {
 			$response=$self->command("NLST $mask");
@@ -254,6 +241,7 @@ sub nlst {
 				{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $socket);$socket = \*$io;};
 				print STDERR "SSL for data connection enabled...\n" if $self->{Debug};
 			};
+			my $tmp;
 			while ($tmp=<$socket>) {
 #print STDERR "G: $q";
 #chop($tmp);chop($tmp);#\r\n -> remove.
@@ -275,17 +263,8 @@ sub putblat {
 	my $sock=$self->{'Sock'};
 	$local=$remote unless defined($local);
 	$self->command("TYPE I");
-	my $tmp;
-	$tmp=$self->command("PASV");
-	$tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
-#print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
-		my $port=$5*256+$6;
-		my $host="$1.$2.$3.$4";
-#print " $host : $port \n";
-		$socket = Net::SSLeay::Handle->make_socket($host, $port)||die "can't create DATA socket at putblat ($host,$port) $!";
-		print "Data link connected.. to $host at $port \n" if $self->{Debug};
-	};
-	die "PASV NOT CONNECTED!($tmp) $!\n" unless defined($socket);
+	$socket=$self->datasocket();
+	die "SOCKET NOT CONNECTED! $!\n" unless defined($socket);
 	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
 	$self->command("STOR $remote");
 
@@ -299,17 +278,18 @@ sub putblat {
 #print "selected.\n";
 	if ($putorblat=~/put/) {
 		CORE::open(L,"$local");binmode L;
+		my $tmp;
 		while ($tmp=<L>) {
-            print $tmp;
-            if (defined ($self->{'PutUpdateCallback'})) {$self->{'PutUpdateCallback'}->(); };#TODO send sth..
-        };#Probably syswrite/sysread would be smarter..
+			print $tmp;
+			if (defined ($self->{'PutUpdateCallback'})) {$self->{'PutUpdateCallback'}->(); };#TODO send sth..
+		};#Probably syswrite/sysread would be smarter..
+		close L;
 	} else {
 		print $local;
 
 	}
 #print "after write...\n";
 	select(STDOUT);
-	close L;
 	close $socket;
 	my $response=$self->response();
 	print  STDERR "resp(afterSTOR) ",$response if $self->{Debug};
@@ -334,15 +314,7 @@ sub getslurp {
 	my $sock=$self->{'Sock'};
 	$local=$remote unless defined($local);
 	$self->command("TYPE I");
-	my $tmp=$self->command("PASV");
-	$tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/ && do {
-#print "I przyszlo $1 $2 $3 $4 $5 $6, port ",$5*256+$6,"\n";
-		my $port=$5*256+$6;
-		my $host="$1.$2.$3.$4";
-#print " $host : $port \n";
-		$socket = Net::SSLeay::Handle->make_socket($host, $port)||die "can't create data socket at getslurp($host,$port) $!";
-		print STDERR "Data link connected to $host at $port..\n" if $self->{Debug};
-	};
+	$socket=$self->datasocket();
 	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
 	$self->command("RETR $remote");
 	if ($self->{"EncryptData"}==1) {
@@ -355,6 +327,7 @@ sub getslurp {
 		CORE::open(L,">$local");binmode L;
 		# TODO replace while <$socket> with
 		# TODO while sysread($sock,$tmp,BUFSIZE);
+		my $tmp;
 		while ($tmp=<$socket>) {
             print L $tmp; print STDERR ":;" if $self->{Debug};
             if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->(); };#TODO send sth..
@@ -362,6 +335,7 @@ sub getslurp {
 		close L;
 	} else {
 		print STDERR "getorslurp: slurp($getorslurp)\n" if $self->{Debug};
+		my $tmp;
 		while ($tmp=<$socket>) {
             $slurped.=$tmp;print STDERR ":." if $self->{Debug}; 
             if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->(); };#TODO send sth..
@@ -372,6 +346,28 @@ sub getslurp {
 	print STDERR "resp(afterRETR) ",$response if $self->{Debug};
 	if (defined $self->{'GetDoneCallBack'}) {$self->{'GetDoneCallBack'}->($response);};
 	return $slurped;
+};
+
+sub datasocket {
+	my ($self)=@_;
+	my ($tmp,$socket);
+	if ($tmp=$self->command("PASV")) {
+		if ($tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/) {
+			my $port=$5*256+$6;
+			my $host="$1.$2.$3.$4";
+			$socket = Net::SSLeay::Handle->make_socket($host, $port);
+			if (defined($socket)) {
+				print STDERR "Data link connected.. to $host at $port\n" if $self->{Debug};
+			} else {
+				die "Data link NOT connected ($host,$port) $!";
+			};
+		} else {
+			die "Problem parsing PASV response($tmp)";
+		};;
+	} else {
+		die "Problem sending PASV request, $tmp"
+	};# end if self -> command PASV
+	return $socket
 };
 
 sub trivialm {
