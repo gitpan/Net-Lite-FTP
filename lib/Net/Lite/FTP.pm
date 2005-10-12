@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.32';
+our $VERSION = '0.33';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -95,6 +95,7 @@ sub dele {
 }
 sub rm {dele(@_);};
 sub delete {dele(@_);};
+sub del { shift->del(@_) };
 
 sub message ($) {
 	my ($self)=@_;
@@ -406,20 +407,20 @@ __END__
 
 =head1 NAME
 
-Net::Lite::FTP - Perl FTP client
+Net::Lite::FTP - Perl FTP client with support for TLS
 
 =head1 SYNOPSIS
 
-use Net::Lite::FTP;
-my $tlsftp=Net::Lite::FTP->new();
-$tlsftp->open("ftp.tls.pl","21");
-$tlsftp->user("user");
-$tlsftp->pass("password");
-$tlsftp->cwd("pub");
-my $files=$tlsftp->nlst("*.exe");
-foreach $f (@files) {
-	$tlsftp->get($f);
-};
+    use Net::Lite::FTP;
+    my $tlsftp=Net::Lite::FTP->new();
+    $tlsftp->open("ftp.tls.pl","21");
+    $tlsftp->user("user");
+    $tlsftp->pass("password");
+    $tlsftp->cwd("pub");
+    my $files=$tlsftp->nlst("*.exe");
+    foreach $f (@files) {
+        $tlsftp->get($f);
+    };
 
 
 =head1 DESCRIPTION
