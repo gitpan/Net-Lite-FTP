@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.33';
+our $VERSION = '0.40';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -135,11 +135,9 @@ sub open($$$) {
 	$self->{'Sock'}=$sock;
 	{select($sock);$|=1;select(STDOUT);};#unbuffer socket
 
+	$self->setup_protection();
+
 # 
-	if ($self->{'Encrypt'}) {
-		$self->command("PBSZ 0");# TODO
-		if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
-	};
 	return 1;
 }
 
@@ -259,7 +257,7 @@ sub nlst {
 };
 
 sub putblat {
-	my ($putorblat,$self,$remote,$local)=@_;
+	my ($putorblat,$stororappe,$self,$remote,$local)=@_;
 	my $socket;
 	my $sock=$self->{'Sock'};
 	$local=$remote unless defined($local);
@@ -267,14 +265,18 @@ sub putblat {
 	$socket=$self->datasocket();
 	die "SOCKET NOT CONNECTED! $!\n" unless defined($socket);
 	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
-	$self->command("STOR $remote");
+	my $r=$self->command("$stororappe $remote");
+	if (!$r) {
+		print  STDERR "Problem trying to put file" if $self->{Debug};
+		return $r;
+	};
 
 	if ($self->{"EncryptData"}==1) {
 		{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $socket);$socket = \*$io;};
 		print STDERR "SSL for data connection enabled...\n" if $self->{Debug};
 	};
 
-	print STDERR "STORE connection opened.\n" if $self->{Debug};
+	print STDERR "$stororappe connection opened.\n" if $self->{Debug};
 	select($socket);
 #print "selected.\n";
 	if ($putorblat=~/put/) {
@@ -293,15 +295,22 @@ sub putblat {
 	select(STDOUT);
 	close $socket;
 	my $response=$self->response();
-	print  STDERR "resp(afterSTOR) ",$response if $self->{Debug};
+	print  STDERR "resp(after$stororappe) ",$response if $self->{Debug};
 	if (defined $self->{'PutDoneCallBack'}) {$self->{'PutDoneCallBack'}->($response);};
 };
 sub put {
-	putblat('put',@_);
+	putblat('put','STOR',@_);
 };
 sub blat {
-	putblat('blat',@_);
+	putblat('blat','STOR',@_);
 };
+sub appe {
+	putblat('put','APPE',@_);
+};
+sub blatappe {
+	putblat('blat','APPE',@_);
+};
+
 sub get {
 	getslurp('get',@_);
 };
@@ -318,6 +327,12 @@ sub getslurp {
 	$socket=$self->datasocket();
 	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
 	$self->command("RETR $remote");
+	my $r=$self->command("RETR $remote");
+	if (!$r) {
+		print  STDERR "Problem trying to get file" if $self->{Debug};
+		return $r;
+	};
+
 	if ($self->{"EncryptData"}==1) {
 		{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $socket);$socket = \*$io;};
 		print  STDERR "SSL for data connection(RETR) enabled...\n" if $self->{Debug};
@@ -398,6 +413,14 @@ sub registerPutDoneCallback {
 
 	$self->{'PutDoneCallback'} = $callback_ref;
 }
+
+sub setup_protection {
+	my ($self)=@_;
+	if ($self->{'Encrypt'}) {
+		$self->command("PBSZ 0");# TODO
+		if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
+	} else {return 1;};
+};
 
 
 

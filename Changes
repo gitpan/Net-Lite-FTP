@@ -1,5 +1,16 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.40     - try to  fail when RETR fails - 
+	reported by Maria Ian, should fix RT#17847
+0.39     - try to  fail when STOR(APPE) fails - like
+	 put: Access failed: 550 cpuinfo: Overwrite permission denied
+0.37
+	- APPE - appe(), blatappe() support.
+0:36 
+	- rollback
+
+0:34    Wed Nov 30 09:43:41 CET 2005
+	- move PBSZ and PROT P until AFTER logged in..
 0.32	Tue Oct 11 20:03:12 CEST 2005
 	- complete datasocket conversion
 0.31    Tue Oct 11 19:53:38 CEST 2005
