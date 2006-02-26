@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.40';
+our $VERSION = '0.41';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -49,6 +49,7 @@ sub new($$) {
 	$self->{"EncryptData"}=1;
 	$self->{"Encrypt"}=1;
 	$self->{"Debug"}=1;
+	$self->{"ErrMSG"}=undef;
 	$self->{"GetUpdateCallback"}  = undef;
 	$self->{"GetDoneCallback"}    = undef;
 	$self->{"PutUpdateCallback"}  = undef;
@@ -213,7 +214,8 @@ sub responserest ($$) {
 #warn $resp;
 #		print STDERR "ERR: $resp\n";
 #warn "Server said we're bad.";
-		return 0;
+		$self->{'ErrMSG'}=$resp;
+		return undef;
 	};
 	print STDERR "RECV: ",$resp if $self->{Debug};
 	return $resp;
@@ -326,10 +328,9 @@ sub getslurp {
 	$self->command("TYPE I");
 	$socket=$self->datasocket();
 	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
-	$self->command("RETR $remote");
 	my $r=$self->command("RETR $remote");
 	if (!$r) {
-		print  STDERR "Problem trying to get file" if $self->{Debug};
+		print  STDERR "Problem trying to get file($remote)" if $self->{Debug};
 		return $r;
 	};
 
