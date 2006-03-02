@@ -1,5 +1,7 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.43     - Meta.yml test
+0.42     - die ..
 0.41	 - putt error code in ErrMSG (this probably still needs fixing)
 	fix 0.40(double get), undef on error in reponse.
 0.40     - try to  fail when RETR fails - 

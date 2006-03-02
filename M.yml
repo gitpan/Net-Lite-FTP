@@ -1,0 +1,8 @@
+--- #YAML:1.0
+name: Net-FTP-Throttle
+version: 0.30
+author:
+  - Leon Brocard <acme@astray.com>
+abstract: 
+license: perl
+generated_by: Module::Build version 0.2611, without YAML.pm

@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.41';
+our $VERSION = '0.43';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -282,7 +282,8 @@ sub putblat {
 	select($socket);
 #print "selected.\n";
 	if ($putorblat=~/put/) {
-		CORE::open(L,"$local");binmode L;
+		CORE::open(L,"$local") or die "Can't open file $local, $!";
+		binmode L;
 		my $tmp;
 		while ($tmp=<L>) {
 			print $tmp;
@@ -341,7 +342,8 @@ sub getslurp {
 	my $slurped="";
 	if ($getorslurp=~/get/) {
 		print STDERR "getorslurp: get\n" if $self->{Debug};
-		CORE::open(L,">$local");binmode L;
+		CORE::open(L,">$local") or die("Can't open file for writing $local, $!");
+		binmode L;
 		# TODO replace while <$socket> with
 		# TODO while sysread($sock,$tmp,BUFSIZE);
 		my $tmp;
