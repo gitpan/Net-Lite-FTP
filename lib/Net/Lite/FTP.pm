@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.43';
+our $VERSION = '0.44';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -226,7 +226,7 @@ sub nlst {
 	my ($self,$mask)=@_;
 	my $sock=$self->{'Sock'};
 	my $socket;
-	my (@files);
+	my (@files)=();
 	$socket=$self->datasocket();
 	if (defined($socket)) {
 		my $response;
@@ -236,7 +236,10 @@ sub nlst {
 			$response=$self->command("NLST");
 		};
 #print STDERR "ReSPONSE: -> : $response\n";
-		if ($response) {
+		#print "KOD : ",$self->{'FTPCODE'},"\n";
+		# 1xx - cos jeszcze bedzie
+		# 2xx - to juz koniec
+		if ($response && ($self->{'FTPCODE'}<200) ) {
 
 			if ($self->{"EncryptData"}==1) {
 				{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $socket);$socket = \*$io;};
@@ -251,7 +254,7 @@ sub nlst {
 			};
 		};
 		close $socket;
-		if ($response) {$response=$self->response();};
+		if ($response && ($self->{'FTPCODE'}<200) ) {if ($response) {$response=$self->response();};}
 		print STDERR "resp(end LIST) ",$response if $self->{Debug};
 		return \@files if $response;
 	};
