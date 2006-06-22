@@ -1,5 +1,6 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.45     - improved logging (damn undefined response)
 0.44	 - NLST processing, 1xx response means - data follows, 2xx means you can close the socket,
 		200 Series: The requested action has been successfully completed.
 		100 Series: The requested action is being initiated, expect another reply before proceeding with a new command.

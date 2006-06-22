@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.44';
+our $VERSION = '0.45';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -113,6 +113,8 @@ sub open($$$) {
 	my $sock;
 	$sock = Net::SSLeay::Handle->make_socket($host, $port);
 	$self->{'Sock'}=$sock;
+	$self->{'Host'}=$host;
+	$self->{'Port'}=$port;
 	if (sysread($sock,$data,BUFSIZE)) {
 		print STDERR "OPEN.Received: $data" if $self->{Debug};
 		$data=$self->responserest($data);
@@ -167,8 +169,12 @@ sub response ($) {
 	my $sock=$self->{'Sock'};
 	my ($read,$resp,$code,$cont);
 	$read=($resp=<$sock>);
-	warn "Damn! undefined response$!\n" unless defined($read);
-	return undef unless defined($read);
+	if (!defined($read)) {
+	warn "Damn! undefined response (err:$!) {H: ".$self->{'Host'}." P:".$self->{'Port'}."}\n";# unless defined($read);
+	$self->{'FTPCODE'}=undef;
+	$self->{'FTPMSG'}=undef;
+	return undef;# unless defined($read);
+	};
 	return $self->responserest($read);
 }
 
@@ -381,13 +387,15 @@ sub datasocket {
 			if (defined($socket)) {
 				print STDERR "Data link connected.. to $host at $port\n" if $self->{Debug};
 			} else {
+				warn "Data link NOT connected ($host,$port) $!";
 				die "Data link NOT connected ($host,$port) $!";
 			};
 		} else {
 			die "Problem parsing PASV response($tmp)";
-		};;
+		};
 	} else {
-		die "Problem sending PASV request, $tmp"
+		warn "undefined response to PASV cmd (err:$!) {H: ".$self->{'Host'}." P:".$self->{'Port'}."}\n";# unless defined($read);
+		die "Problem sending PASV request, $tmp";
 	};# end if self -> command PASV
 	return $socket
 };
