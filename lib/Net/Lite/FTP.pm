@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.46';
+our $VERSION = '0.47';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -78,12 +78,7 @@ sub cwd ($$) {
 
 sub size ($$) {
 	my ($self,$filename)=@_;
-	my $size;
-	$size=$self->command("SIZE $filename");
-	if (defined($size)) {
-		$size=~/^\d+\s+(\d+)/ && do {return $1;};
-	};
-	return undef;
+	return $self->command("SIZE $filename");
 }
 sub cdup ($$) {
 	my ($self,$data)=@_;
@@ -98,6 +93,10 @@ sub rm {dele(@_);};
 sub delete {dele(@_);};
 sub del { shift->del(@_) };
 
+sub rawmessage ($) {
+	my ($self)=@_;
+	return $self->{'FTPRAWMSG'};
+};
 sub message ($) {
 	my ($self)=@_;
 	return $self->{'FTPMSG'};
@@ -178,7 +177,7 @@ sub response ($) {
 	warn "Damn! undefined response (err:$!) {H: ".$self->{'Host'}." P:".$self->{'Port'}."}\n";# unless defined($read);
 	$self->{'FTPCODE'}=undef;
 	$self->{'FTPMSG'}=undef;
-	$self->{'FTPMSGFULL'}=undef;
+	$self->{'FTPRAWMSG'}=undef;
 	return undef;# unless defined($read);
 	};
 	return $self->responserest($read);
@@ -203,13 +202,13 @@ sub responserest ($$) {
 #  lub wielolinijkowe: \d\d\d-
 	print STDERR "SRV Response: $read" if $self->{Debug};
 	$read=~/^(\d\d\d)\s(.*)/  && do {
-		$code=$1;$msg=$2;
+		$code=$1;$msg=$2;chomp($msg);
 	};
 	$read=~/^(\d\d\d)-(.*)/  && do {
 		$cont=1;$msg.=$2;
 		print STDERR "wielolinijkowa odpowiedz z servera.." if $self->{Debug};
 	};
-	if ($read=~/^(\d\d\d)\s(.*)/m) {$cont=0;$msg.=$2;}; # wyjatek na wielolinijkowe na dziendobry
+	if ($read=~/^(\d\d\d)\s(.*)/m) {$cont=0;}; # wyjatek na wielolinijkowe na dziendobry
 	if ($cont) {
 		do {
 			$read=<$sock>;
@@ -222,7 +221,7 @@ sub responserest ($$) {
 	$self->{'FTPCODE'}=$code;
 	$self->{'FTPMSG'}=$msg;
 	#$resp=~s/^\d\d\d\s/;
-	$self->{'FTPFULLMSG'}=$resp;
+	$self->{'FTPRAWMSG'}=$resp;
 
 	if ($code>399) {
 #warn "Jaki¶ problem, chyba najlepiej sie wycofac\n";
@@ -233,7 +232,7 @@ sub responserest ($$) {
 		return undef;
 	};
 	print STDERR "RECV: ",$resp if $self->{Debug};
-	return $resp;
+	return $msg;
 }
 
 sub list {return nlst(@_);};
@@ -389,7 +388,7 @@ sub datasocket {
 	my ($self)=@_;
 	my ($tmp,$socket);
 	if ($tmp=$self->command("PASV")) {
-		if ($tmp=~/227 [^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/) {
+		if ($self->msgcode()==227 &&  $tmp=~/[^\d]*(\d+),(\d+),(\d+),(\d+),(\d+),(\d+)/) {
 			my $port=$5*256+$6;
 			my $host="$1.$2.$3.$4";
 			$socket = Net::SSLeay::Handle->make_socket($host, $port);
