@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.45';
+our $VERSION = '0.46';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -156,6 +156,11 @@ sub rename ($$$) {
 	return $self->command("RNTO $to");
 	} else {return 0;};
 };
+sub mdtm ($$) {
+	my ($self,$file)=@_;
+	return $self->command("MDTM $file");
+};
+
 sub command ($$){
 	my ($self,$data)=@_;
 	print STDERR "Sending: ",$data."\n" if $self->{Debug};
@@ -173,6 +178,7 @@ sub response ($) {
 	warn "Damn! undefined response (err:$!) {H: ".$self->{'Host'}." P:".$self->{'Port'}."}\n";# unless defined($read);
 	$self->{'FTPCODE'}=undef;
 	$self->{'FTPMSG'}=undef;
+	$self->{'FTPMSGFULL'}=undef;
 	return undef;# unless defined($read);
 	};
 	return $self->responserest($read);
@@ -181,7 +187,7 @@ sub response ($) {
 sub responserest ($$) {
 	my ($self,$read)=@_;
 	my $sock=$self->{'Sock'};
-	my ($resp,$code,$cont);
+	my ($resp,$code,$cont,$msg);
 	$resp=$read;
 #UWAGA!
 # wcale nieprawda to co nizej pisze. Jesli pierwsza linijka to \d\d\d-
@@ -196,24 +202,27 @@ sub responserest ($$) {
 # Responsy maja format \d\d\d
 #  lub wielolinijkowe: \d\d\d-
 	print STDERR "SRV Response: $read" if $self->{Debug};
-	$read=~/^(\d\d\d)/  && do {
-		$code=$1;
+	$read=~/^(\d\d\d)\s(.*)/  && do {
+		$code=$1;$msg=$2;
 	};
-	$read=~/^(\d\d\d)-/  && do {
-		$cont=1;
+	$read=~/^(\d\d\d)-(.*)/  && do {
+		$cont=1;$msg.=$2;
 		print STDERR "wielolinijkowa odpowiedz z servera.." if $self->{Debug};
 	};
-	if ($read=~/^(\d\d\d)\s/m) {$cont=0;}; # wyjatek na wielolinijkowe na dziendobry
+	if ($read=~/^(\d\d\d)\s(.*)/m) {$cont=0;$msg.=$2;}; # wyjatek na wielolinijkowe na dziendobry
 	if ($cont) {
 		do {
 			$read=<$sock>;
 			$resp.=$read;
+			$read=~/^(\d\d\d)-(.*)/  && do {$cont=1;$msg.=$2;};
+			$read=~/^(\d\d\d)\s(.*)/  && do {$cont=0;$msg.=$2;};
 			print " ----> $read\n" if $self->{Debug};
-		} until ($read=~/^\d\d\d\s/m);
+		} until ($cont=0);
 	};
 	$self->{'FTPCODE'}=$code;
-	$self->{'FTPMSG'}=$resp;
-
+	$self->{'FTPMSG'}=$msg;
+	#$resp=~s/^\d\d\d\s/;
+	$self->{'FTPFULLMSG'}=$resp;
 
 	if ($code>399) {
 #warn "Jaki¶ problem, chyba najlepiej sie wycofac\n";
