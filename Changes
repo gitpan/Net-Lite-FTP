@@ -1,5 +1,10 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.51     - cosmetic fix to size()
+0.50     - oups, fix size()
+0.49     - if ($sth=0) instead of $sth==0 fixed.
+	continuations fixed.
+0.48     - fix size() ( previously lost fixes ), fix multiline broken in  0.47
 0.47     - fix response, fix size, introduce rawmessage
 0.46     - mdtm support
 0.45     - improved logging (damn undefined response)

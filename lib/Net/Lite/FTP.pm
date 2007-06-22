@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.47';
+our $VERSION = '0.52';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -48,7 +48,7 @@ sub new($$) {
 	$self->{"Connected"}=0;
 	$self->{"EncryptData"}=1;
 	$self->{"Encrypt"}=1;
-	$self->{"Debug"}=1;
+	$self->{"Debug"}=0;
 	$self->{"ErrMSG"}=undef;
 	$self->{"GetUpdateCallback"}  = undef;
 	$self->{"GetDoneCallback"}    = undef;
@@ -78,7 +78,8 @@ sub cwd ($$) {
 
 sub size ($$) {
 	my ($self,$filename)=@_;
-	return $self->command("SIZE $filename");
+	my $size=$self->command("SIZE $filename");chop $size;
+	return $size;
 }
 sub cdup ($$) {
 	my ($self,$data)=@_;
@@ -205,7 +206,7 @@ sub responserest ($$) {
 		$code=$1;$msg=$2;chomp($msg);
 	};
 	$read=~/^(\d\d\d)-(.*)/  && do {
-		$cont=1;$msg.=$2;
+		$cont=1;$code=$1;$msg.=$2;
 		print STDERR "wielolinijkowa odpowiedz z servera.." if $self->{Debug};
 	};
 	if ($read=~/^(\d\d\d)\s(.*)/m) {$cont=0;}; # wyjatek na wielolinijkowe na dziendobry
@@ -213,10 +214,10 @@ sub responserest ($$) {
 		do {
 			$read=<$sock>;
 			$resp.=$read;
-			$read=~/^(\d\d\d)-(.*)/  && do {$cont=1;$msg.=$2;};
-			$read=~/^(\d\d\d)\s(.*)/  && do {$cont=0;$msg.=$2;};
+			$read=~/^(\d\d\d)-(.*)/  && do {$cont=1;$code=$1;$msg.=$2;};
+			$read=~/^(\d\d\d)\s(.*)/  && do {$cont=0;$code=$1;$msg.=$2;};
 			print " ----> $read\n" if $self->{Debug};
-		} until ($cont=0);
+		} until ($cont==0);
 	};
 	$self->{'FTPCODE'}=$code;
 	$self->{'FTPMSG'}=$msg;
