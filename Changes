@@ -1,5 +1,10 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.54	 - sub readln, fix for:
+	OPEN.Received: 220 xanax.wig.lublin.pl FTP server (Version 6.SRV Response: 220 xanax.wig.lublin.pl FTP server (Version 6.RECV: 220 xanax.wig.lublin.pl FTP server (Version 6.OPEN..Received: xanax.wig.lublin.pl FTP server (Version 6.Sending: USER anica
+	SRV Response: 00LS) ready.
+
+0.52     - cosmetic fix to size()
 0.51     - cosmetic fix to size()
 0.50     - oups, fix size()
 0.49     - if ($sth=0) instead of $sth==0 fixed.

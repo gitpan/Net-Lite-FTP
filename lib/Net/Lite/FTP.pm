@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.52';
+our $VERSION = '0.54';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -78,7 +78,7 @@ sub cwd ($$) {
 
 sub size ($$) {
 	my ($self,$filename)=@_;
-	my $size=$self->command("SIZE $filename");chop $size;
+	my $size=$self->command("SIZE $filename");chop $size if defined($size);
 	return $size;
 }
 sub cdup ($$) {
@@ -107,6 +107,21 @@ sub msgcode ($) {
 	return $self->{'FTPCODE'};
 };
 
+sub readln {
+        my ($sock)=@_;
+        my ($data,$ln);
+        if (sysread($sock,$data,BUFSIZE)) {
+                $ln=$data;
+                while ($data!~/\n/) {
+                        if (sysread($sock,$data,BUFSIZE)) {
+                                #print "OPEN..Received: {$data}\n";# if $self->{Debug};
+                                $ln.=$data;
+                        };
+                };
+        };
+        return $ln;
+};
+
 sub open($$$) {
 	my ($self,$host,$port)=@_;
 	my ($data);
@@ -115,7 +130,7 @@ sub open($$$) {
 	$self->{'Sock'}=$sock;
 	$self->{'Host'}=$host;
 	$self->{'Port'}=$port;
-	if (sysread($sock,$data,BUFSIZE)) {
+	if ($data=readln($sock)) {
 		print STDERR "OPEN.Received: $data" if $self->{Debug};
 		$data=$self->responserest($data);
 		print STDERR "OPEN..Received: $data" if $self->{Debug};
@@ -124,7 +139,7 @@ sub open($$$) {
 	if ($self->{'Encrypt'}) {
 		$data="AUTH TLS\r\n";
 		syswrite($sock,$data);
-		if (sysread($sock,$data,BUFSIZE)) {
+		if ($data=readln($sock)) {
 			print STDERR "Received: $data" if $self->{Debug};
 		}
 	}
@@ -318,6 +333,7 @@ sub putblat {
 	my $response=$self->response();
 	print  STDERR "resp(after$stororappe) ",$response if $self->{Debug};
 	if (defined $self->{'PutDoneCallBack'}) {$self->{'PutDoneCallBack'}->($response);};
+	return $self->{'FTPRAWMSG'};
 };
 sub put {
 	putblat('put','STOR',@_);
