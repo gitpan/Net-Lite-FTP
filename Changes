@@ -1,5 +1,11 @@
 Revision history for Perl extension Net::Lite::FTP.
 
+0.61    - hotfix - nlst vs list
+0.60    - try to support explicit ftps ( self->{FTPS}=1 )
+0.59    - setsockopt - set TOS LOWDELAY on control channel, and THROUGHPUT on data channel, set keepalive on control channel.
+0.57	- report read bytes in PutUpdateCallback (this still needs work)
+0.56	- report read bytes in GetUpdateCallback
+0.55	- mkdir, rmdir
 0.54	 - sub readln, fix for:
 	OPEN.Received: 220 xanax.wig.lublin.pl FTP server (Version 6.SRV Response: 220 xanax.wig.lublin.pl FTP server (Version 6.RECV: 220 xanax.wig.lublin.pl FTP server (Version 6.OPEN..Received: xanax.wig.lublin.pl FTP server (Version 6.Sending: USER anica
 	SRV Response: 00LS) ready.

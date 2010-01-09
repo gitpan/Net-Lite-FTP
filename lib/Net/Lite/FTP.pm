@@ -27,7 +27,7 @@ our @EXPORT = qw(
 
 		);
 
-our $VERSION = '0.54';
+our $VERSION = '0.61';
 # Preloaded methods go here.
 # Autoload methods go after =cut, and are processed by the autosplit program.
 use constant BUFSIZE => 4096;
@@ -36,7 +36,7 @@ BEGIN {
 # You only need this if your FTP server requires client certs:
 #Net::SSLeay::Handle::_set_cert("/home/eyck/my.pem"); 
 #Net::SSLeay::Handle::_set_key("/home/eyck/my.pem");
-# but if you want this, you need to patch you Net::SSLeay, 
+# but if you want this, you need to patch your Net::SSLeay, 
 };
 
 sub new($$) {
@@ -75,6 +75,14 @@ sub cwd ($$) {
 	my ($self,$data)=@_;
 	$self->command("CWD $data");
 }
+sub mkdir ($$) {
+	my ($self,$data)=@_;
+	$self->command("MKD $data");
+}
+sub rmdir ($$) {
+	my ($self,$data)=@_;
+	$self->command("RMD $data");
+}
 
 sub size ($$) {
 	my ($self,$filename)=@_;
@@ -87,7 +95,7 @@ sub cdup ($$) {
 }
 sub dele {
 	my ($self,$pathname)=@_;
-    return undef unless defined($pathname);
+	return undef unless defined($pathname);
 	$self->command("DELE $pathname");
 }
 sub rm {dele(@_);};
@@ -122,6 +130,9 @@ sub readln {
         return $ln;
 };
 
+sub SOL_IP { 0; };
+sub IP_TOS { 1; };
+
 sub open($$$) {
 	my ($self,$host,$port)=@_;
 	my ($data);
@@ -130,13 +141,38 @@ sub open($$$) {
 	$self->{'Sock'}=$sock;
 	$self->{'Host'}=$host;
 	$self->{'Port'}=$port;
+	#tmp
+	use Socket;
+	#setsockopt($sock,&SOL_SOCKET,&SO_KEEPALIVE,undef,undef) || warn "setsockopt: $!";
+	setsockopt($sock, SOL_SOCKET, SO_SNDTIMEO, pack('LL', 15, 0) ) or die "setsockopt".$!;  
+	setsockopt($sock, SOL_SOCKET, SO_RCVTIMEO, pack('LL', 15, 0) ) or die "setsockopt".$!;
+	setsockopt($sock, SOL_SOCKET, SO_KEEPALIVE, 1 ) or die "setsockopt".$!;  
+	#setsockopt($sock, SOL_SOCKET, IP_TOS, IPTOS_LOWDELAY ) or die "setsockopt".$!;  
+	#/usr/share/perl/5.8.4/Net/Ping.pm:      setsockopt($self->{"fh"}, SOL_IP, IP_TOS(), pack("I*", $self->{'tos'}))
+	setsockopt($sock, SOL_IP, IP_TOS(), pack("I*",0x10 ));#LOWLATENCY
+
+	#/usr/include/linux/ip.h:#define IPTOS_LOWDELAY          0x10
+	##define IPTOS_THROUGHPUT        0x08
+	#define	IPTOS_MINCOST		0x02
+	#/usr/share/perl/5.8.4/Net/Ping.pm:      setsockopt($self->{"fh"}, SOL_IP, IP_TOS(), pack("I*", $self->{'tos'}))
+	#end tmp 2008-11-04
+
+	#FTPS EXPLICIT:
+	if ($self->{'FTPS'}) {
+		#{tie(*S, "Net::SSLeay::Handle", $sock);$sock = \*S;};
+		# Unique glob?
+		{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $sock);$sock = \*$io;};
+	}
+
+
+
 	if ($data=readln($sock)) {
 		print STDERR "OPEN.Received: $data" if $self->{Debug};
 		$data=$self->responserest($data);
 		print STDERR "OPEN..Received: $data" if $self->{Debug};
 	}
 
-	if ($self->{'Encrypt'}) {
+	if ($self->{'Encrypt'} && (! $self->{'FTPS'} )) {
 		$data="AUTH TLS\r\n";
 		syswrite($sock,$data);
 		if ($data=readln($sock)) {
@@ -145,11 +181,12 @@ sub open($$$) {
 	}
 	$self->{'RAWSock'}=$sock;
 
-	if ($self->{'Encrypt'}) {
+	if ($self->{'Encrypt'} && (! $self->{'FTPS'} )) {
 		#{tie(*S, "Net::SSLeay::Handle", $sock);$sock = \*S;};
 		# Unique glob?
 		{my $io=new IO::Handle;	tie(*$io, "Net::SSLeay::Handle", $sock);$sock = \*$io;};
 	}
+
 	$self->{'Sock'}=$sock;
 	{select($sock);$|=1;select(STDOUT);};#unbuffer socket
 
@@ -162,6 +199,10 @@ sub open($$$) {
 sub quit {
 	my ($self)=@_;
 	return $self->command("QUIT");
+}
+sub noop {
+	my ($self)=@_;
+	return $self->command("NOOP");
 }
 sub rename ($$$) {
 	my ($self,$from,$to)=@_;
@@ -296,7 +337,7 @@ sub putblat {
 	my $socket;
 	my $sock=$self->{'Sock'};
 	$local=$remote unless defined($local);
-	$self->command("TYPE I");
+	$self->command("TYPE I") unless ($self->{'DontDoType'});
 	$socket=$self->datasocket();
 	die "SOCKET NOT CONNECTED! $!\n" unless defined($socket);
 	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
@@ -320,12 +361,12 @@ sub putblat {
 		my $tmp;
 		while ($tmp=<L>) {
 			print $tmp;
-			if (defined ($self->{'PutUpdateCallback'})) {$self->{'PutUpdateCallback'}->(); };#TODO send sth..
+			if (defined ($self->{'PutUpdateCallback'})) {$self->{'PutUpdateCallback'}->( length($tmp) ); };#TODO send sth..
 		};#Probably syswrite/sysread would be smarter..
 		close L;
 	} else {
 		print $local;
-
+		if (defined ($self->{'PutUpdateCallback'})) {$self->{'PutUpdateCallback'}->( length($local) ); };#TODO send sth..
 	}
 #print "after write...\n";
 	select(STDOUT);
@@ -362,6 +403,15 @@ sub getslurp {
 	$local=$remote unless defined($local);
 	$self->command("TYPE I");
 	$socket=$self->datasocket();
+	#tmp
+	use Socket;
+	#setsockopt($sock,&SOL_SOCKET,&SO_KEEPALIVE,undef,undef) || warn "setsockopt: $!";
+	setsockopt($socket, SOL_SOCKET, SO_SNDTIMEO, pack('LL', 15, 0) ) or die "setsockopt".$!;  
+	setsockopt($socket, SOL_SOCKET, SO_RCVTIMEO, pack('LL', 15, 0) ) or die "setsockopt".$!;
+	setsockopt($socket, SOL_SOCKET, SO_KEEPALIVE, 1 ) or die "setsockopt".$!;  
+	setsockopt($sock, SOL_IP, IP_TOS(), pack("I*",0x08 ));#THROUGHPUT
+	#end tmp 2008-11-04
+
 	if ($self->{"EncryptData"}!=0) {$self->command("PROT P"); };
 	my $r=$self->command("RETR $remote");
 	if (!$r) {
@@ -381,17 +431,23 @@ sub getslurp {
 		# TODO replace while <$socket> with
 		# TODO while sysread($sock,$tmp,BUFSIZE);
 		my $tmp;
-		while ($tmp=<$socket>) {
-            print L $tmp; print STDERR ":;" if $self->{Debug};
-            if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->(); };#TODO send sth..
-        };
+		while (sysread($socket,$tmp,BUFSIZE)) {
+			print L $tmp;
+			print STDERR length($tmp),":;\n" if $self->{Debug};
+			if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->(length($tmp)); };#TODO send sth..
+		};
+#tmp-2008-10-22#		while ($tmp=<$socket>) {
+#tmp-2008-10-22#			print L $tmp;
+#tmp-2008-10-22#			print STDERR length($tmp),":;\n" if $self->{Debug};
+#tmp-2008-10-22#			if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->();print STDERR "GUC defined, and has been called\n"; };#TODO send sth..
+#tmp-2008-10-22#		};
 		close L;
 	} else {
 		print STDERR "getorslurp: slurp($getorslurp)\n" if $self->{Debug};
 		my $tmp;
 		while ($tmp=<$socket>) {
             $slurped.=$tmp;print STDERR ":." if $self->{Debug}; 
-            if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->(); };#TODO send sth..
+            if (defined ($self->{'GetUpdateCallback'})) {$self->{'GetUpdateCallback'}->( length($tmp) ); };#TODO send sth..
         };
 	};
 	close $socket;
